@@ -19,10 +19,12 @@ import org.apache.spark._
 import org.apache.spark.sql.SparkSession
 
 import org.apache.hadoop.io._
+import scala.collection.mutable.ArrayBuffer
 
-import org.apache.spark.sql.functions._
 
-object SimpleApp {
+
+object SimpleApp {import org.apache.spark.sql.functions._
+
 
   def main(args: Array[String]) {
     val emailPattern = new Regex("""\b[A-Za-z0-9._%+-]{1,64}@(?:[A-Za-z0-9.-]{1,63}\.){1,125}[A-Za-z]{2,63}\b""")
@@ -36,7 +38,7 @@ object SimpleApp {
     // Initialize the sparkSession
     val spark = SparkSession.builder.appName("Simple Application").getOrCreate()
     val sc = spark.sparkContext
- 
+    import spark.implicits._
 
     // Open the firstDir directory as an RDD of type [(LongWritable, WARCWritable)]
     val warcInput = sc.newAPIHadoopFile(firstDir, classOf[WARCInputFormat], classOf[LongWritable],classOf[WARCWritable]) 
@@ -58,7 +60,7 @@ object SimpleApp {
     //     var reducedDF = firstDF.groupBy("email").agg(collect_set("url") as "pages")
     //     var reducedDF2.withColumn("num_pages",size(col("pages")))
 
-    println(reducedDF.count)
+    println(reducedDF.show)
 
  //   .reduceByKey(_ ++ _).sortBy(_._2.size).map(tup => (tup._1, tup._2.mkString(",")))
     
@@ -70,12 +72,10 @@ object SimpleApp {
     for(dirPath <-lineArray){
       val newPath = warcPathFirstHalf + dirPath
       val newInput = sc.newAPIHadoopFile(newPath, classOf[WARCInputFormat], classOf[LongWritable],classOf[WARCWritable]) 
-      
       val newWarcs = newInput.values
-  
+
       // Creates a new RDD which contains tuples of an email and all of the pages it was found on. 
       val matches = newWarcs.flatMap( warc => analyze2(warc.getRecord) )
-    
       val filtered = matches.filter(tup => tup._2 != null)
 
       var nextDF = filtered.toDF("email","url")
@@ -83,13 +83,14 @@ object SimpleApp {
       var nextreducedDF = nextDF.groupBy("email").agg(concat_ws(",", collect_set("url")) as "pageString")
 
       reducedDF = reducedDF.unionAll(nextreducedDF)
+      
       //create an action so spark executes 
-      i = i+1
-      if (i%100 == 0){reducedDF.take(1)}
+      if (i%10 == 0) print(reducedDF.count + "\n")
     }
-    val savedFilePath = "s3://eecs-practice/spark_test/test_short"
+
+    val savedFilePath = "s3://eecs-practice/spark_test/test_14"
     
-    reducedDF.rdd.repartition(100).saveAsTextFile(savedFilePath)
+    reducedDF.rdd.repartition(50).saveAsTextFile(savedFilePath)
     //reducedDF.rdd.saveAsTextFile(savedFilePath)
     //reducedDF.write.save(savedFilePath)
 
@@ -97,20 +98,67 @@ object SimpleApp {
     println(s"Emails found in WARCRecords saved in $savedFilePath")
     println("--------------")
     spark.stop()
+      }
 }
 
-
-  def analyze2(record: WARCRecord): Array[Tuple2[String, String]] = {
+//val icEmailPattern = new Regex(""" \b[A-Za-z0-9._%+-]{1,64}@(?:[A-Za-z0-9-\.]{1,63})\.ic\.gov\b""")
+  def analyze2(record: WARCRecord): ArrayBuffer[Tuple2[String, String]] = {
 
     // val emailPattern = new Regex("""\b[A-Za-z0-9._%+-]{1,64}@(?:[A-Za-z0-9.-]{1,63}\.){1,125}[A-Za-z]{2,63}\b""")
-    val icEmailPattern = new Regex("""\b[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,64}\.ic\.gov\b""")
-    // TODO: avoid doing a String copy here ... what does getContent return?
-    val content = new String(record.getContent)
+    //val icEmailPattern = new Regex(""" \b[A-Za-z0-9._%+-]{1,64}@(?:[A-Za-z0-9-\.]{1,63})\.ic\.gov\b""")
 
-    val emails = icEmailPattern.findAllMatchIn(content).toArray.map(email => email.toString)
+    var emails = ArrayBuffer[String]()
+    val content = record.getContent
+
+    //val emails = icEmailPattern.findAllMatchIn(content).toArray.map(email => email.toString)
+    var sizeread = 0
+    var word = ""
+    var startingSearch = true
+    for (b <- content){
+      var bc = b.toChar
+      if (startingSearch){
+        //if we are at the start of a word
+        if (!bc.isWhitespace){
+          sizeread +=1
+          word += bc
+          startingSearch = false
+        }
+
+      }
+      //if current search longer than email look for next boundary
+      else if (sizeread >= 200){
+        //check if starting word
+        if(bc.isWhitespace){
+          word = ""
+          sizeread = 0
+        }
+      }
+      //if at pontential start of word
+      else if (sizeread == 0){
+        //if at start of word
+        if(!bc.isWhitespace){
+          sizeread +=1
+          word +=bc
+        }
+      }
+      //if in middle of word
+      else{
+        //if another character
+        if(!bc.isWhitespace){
+          sizeread +=1
+          word += bc
+        }
+        //else if a boundary
+        else{
+          sizeread = 0
+          if(word.endsWith(".ic.gov") && word.contains("@")) emails += word
+          word = ""
+        }
+      }
+    }
 
     if (emails.isEmpty) {
-      return Array(("null", null))
+      return ArrayBuffer(("null", null))
     } else {
       val uri = new URI(record.getHeader.getTargetURI)
       val url = uri.toURL.getHost()
@@ -119,7 +167,5 @@ object SimpleApp {
       }
     }
   }
-  // TODO: see if we can create a new column in our DataFrame earlier. **For now, it is way easier to use an RDD then convert so we don't have to deal with a DF with Arrays
-  // val analyze2Udf = udf(analyze2(_:WARCRecord))
 
 }
