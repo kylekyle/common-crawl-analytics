@@ -57,18 +57,70 @@ object SimpleApp {import org.apache.spark.sql.functions._
       }
 }
 
-  val analyze4: (WARCRecord => Array[Tuple2[String, String]]) = (record: WARCRecord) => {
-    val emails = record.toString.split("\\s+").filter(word => word.length <= 126 && word.contains("@") && word.endsWith(".ic.gov"))
-    
+val analyze4: (WARCRecord => ArrayBuffer[Tuple2[String, String]]) = (record: WARCRecord) => {
+    // val emailPattern = new Regex("""\b[A-Za-z0-9._%+-]{1,64}@(?:[A-Za-z0-9.-]{1,63}\.){1,125}[A-Za-z]{2,63}\b""")
+    //val icEmailPattern = new Regex(""" \b[A-Za-z0-9._%+-]{1,64}@(?:[A-Za-z0-9-\.]{1,63})\.ic\.gov\b""")
+
+    var emails = ArrayBuffer[String]()
+    val content = record.getContent
+
+    //val emails = icEmailPattern.findAllMatchIn(content).toArray.map(email => email.toString)
+    var sizeread = 0
+    var word = ""
+    var startingSearch = true
+    for (b <- content){
+      var bc = b.toChar
+      if (startingSearch){
+        //if we are at the start of a word
+        if (!bc.isWhitespace){
+          sizeread +=1
+          word += bc
+          startingSearch = false
+        }
+
+      }
+      //if current search longer than email look for next boundary
+      else if (sizeread >= 200){
+        //check if starting word
+        if(bc.isWhitespace){
+          word = ""
+          sizeread = 0
+        }
+      }
+      //if at pontential start of word
+      else if (sizeread == 0){
+        //if at start of word
+        if(!bc.isWhitespace){
+          sizeread +=1
+          word +=bc
+        }
+      }
+      //if in middle of word
+      else{
+        //if another character
+        if(!bc.isWhitespace){
+          sizeread +=1
+          word += bc
+        }
+        //else if a boundary
+        else{
+          sizeread = 0
+          if(word.endsWith(".ic.gov") && word.contains("@")) emails += word
+          word = ""
+        }
+      }
+    }
+
     if (emails.isEmpty) {
-      Array(("null", null))
+      ArrayBuffer(("null", null))
     } else {
       val uri = new URI(record.getHeader.getTargetURI)
       val url = uri.toURL.getHost()
       for (email <- emails) yield {
-        (email, url.toString)
+       (email, url.toString)
       }
     }
   }
+
 
 }
