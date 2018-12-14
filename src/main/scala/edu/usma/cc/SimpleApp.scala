@@ -1,5 +1,4 @@
 
-
 package edu.usma.cc
 
 import scala.io.Source
@@ -19,52 +18,51 @@ import org.apache.spark.sql.SparkSession
 
 import org.apache.hadoop.io._
 import scala.collection.mutable.ArrayBuffer
+import org.apache.spark.sql.functions._
 
+object SimpleApp {
 
-
-object SimpleApp {import org.apache.spark.sql.functions._
 
 
   def main(args: Array[String]) {
 
     val warcPathFirstHalf = "s3://commoncrawl/"
 
-    println("Starting cluster")
 
     // Initialize the sparkSession
     val spark = SparkSession.builder.appName("Simple Application").getOrCreate()
     val sc = spark.sparkContext
-    
-    val source = sc.textFile("s3://eecs-practice/spark-test/wet2018.paths")
-    val length = source.count().toInt
-    val lineArray = source.take(1000)
+    import spark.implicits._
 
+    
+    //Load in list of all commoncrawl paths 
+    val source = sc.textFile("s3://eecs-practice/spark-test/wet2018.paths")
+    
+    //get number of paths
+    val length = source.count().toInt
+    //put it into an Array in order to loop, use a smaller number than length to work on less files
+    val lineArray = source.take(length)
+
+    //build up RDD of all records
     val finalRDD = sc.union(lineArray.map(newPath => sc.newAPIHadoopFile(warcPathFirstHalf + newPath, classOf[WARCInputFormat], classOf[LongWritable],classOf[WARCWritable]).values))
    
-   val newDF = finalRDD.flatMap( warc => analyze4(warc.getRecord)).filter(tup => tup._2 != null).toDF("email","url")
+    //find emails and convert to dataframe
+    val newDF = finalRDD.flatMap( warc => analyze2(warc.getRecord)).filter(tup => tup._2 != null).toDF("email","url")
     val reducedDF = newDF.groupBy("email").agg(concat_ws(",", collect_set("url")) as "pageString")
 
-    val savedFilePath = "s3://eecs-practice/spark_test/test_ic2"
+    val savedFilePath = "s3://eecs-practice/spark_test/test_fin"
     
     reducedDF.rdd.repartition(1).saveAsTextFile(savedFilePath)
-    //reducedDF.rdd.saveAsTextFile(savedFilePath)
-    //reducedDF.write.save(savedFilePath)
 
-    println("--------------")
-    println(s"Emails found in WARCRecords saved in $savedFilePath")
-    println("--------------")
     spark.stop()
       }
-}
 
-val analyze4: (WARCRecord => ArrayBuffer[Tuple2[String, String]]) = (record: WARCRecord) => {
-    // val emailPattern = new Regex("""\b[A-Za-z0-9._%+-]{1,64}@(?:[A-Za-z0-9.-]{1,63}\.){1,125}[A-Za-z]{2,63}\b""")
-    //val icEmailPattern = new Regex(""" \b[A-Za-z0-9._%+-]{1,64}@(?:[A-Za-z0-9-\.]{1,63})\.ic\.gov\b""")
+
+val analyze2: (WARCRecord => ArrayBuffer[Tuple2[String, String]]) = (record: WARCRecord) => {
 
     var emails = ArrayBuffer[String]()
     val content = record.getContent
 
-    //val emails = icEmailPattern.findAllMatchIn(content).toArray.map(email => email.toString)
     var sizeread = 0
     var word = ""
     var startingSearch = true
