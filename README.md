@@ -7,28 +7,10 @@ This project contains analytics designed to run on AWS clusters.
 ### On a Cluster
 
 * To build the jar, download sbt-1.0.2 and run `sbt assembly`
-* Copy the jar to an Amazon S3 bucket
+* Copy the jar from you computer to an Amazon S3 bucket (Download via S3 webpage)
 * Go to EMR and create cluster
 * Use Spark software and applicable hardware configuration
 * Run spark application (not custom .jar file) with spark submit option: --class edu.usma.cc.SimpleApp
-
-### Current Problems:
-
-* Running out of physical memory
-* Running out of Java heap space memory
-* Estimating cost of a job
-
-* Attempt m4.xlarge for large job (3 nodes)
-* Attempted I2.8xlarge for large job (3 nodes)
-* Want to try on r5d.2xlarge with configurations:
-Spark.executor.instances: 6
-spark.yarn.executor.memoryOverhead: 3072
-Spark.executor.memory: 18
-spark.yarn.driver.memoryOverhead: 7168
-Spark.driver.memory: 56
-Spark.executor.cores: 1
-Spark.driver.cores: 3
-Spark.default.parallelism: 12
 
 
 ### Check out the folowing Apache Spark webpage links below for useful information
@@ -53,18 +35,6 @@ Unless you are a prodigal programmer, or just happen to have your own WARC parse
 
 This project was built using sbt.  You'll notice it uses a number of specific packages and they are not always included if you compile with `sbt package`, therefore I always compiled from the common-crawl-analytics directory with `sbt assembly`.
 
-## Spark 2.-.- idiosyncracies
-
-* Using map & flatMap methods on Datasets
-You can no longer map directly over the rows of DataFrames, as they are now simply a type alias for Dataset[Row]. In Spark 2, to map over a Dataset[T], an encoder for type T must be available in the current context. Encoders are available for standard types and for case classes, but not for Row since it is a generic container type. If you wish to map over the rows of a DataFrame df, you should now convert it to an RDD first:
-
-* Where before you would write:
-
-`df.map { row: Row  => ... }`
-
-* Now you should write:
-
-`df.rdd.map { row: Row => ... }`
 
 ## Pulling Down a Common Crawl WET File
 
