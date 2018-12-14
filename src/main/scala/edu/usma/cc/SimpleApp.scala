@@ -58,7 +58,7 @@ object SimpleApp {import org.apache.spark.sql.functions._
 }
 
   val analyze4: (WARCRecord => Array[Tuple2[String, String]]) = (record: WARCRecord) => {
-    val emails = record.toString.split(" ").filter(word => word.length <= 126 && word.contains("@") && word.endsWith(".ic.gov"))
+    val emails = record.toString.split("\\s+").filter(word => word.length <= 126 && word.contains("@") && word.endsWith(".ic.gov"))
     
     if (emails.isEmpty) {
       Array(("null", null))
