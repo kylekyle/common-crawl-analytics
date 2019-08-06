@@ -58,7 +58,7 @@ object SimpleApp {
     val newDF = newRDD.toDF("email","url")
     val reducedDF = newDF.groupBy("email").agg(concat_ws(",", collect_set("url")) as "pageString")
     
-    //look into checkpoint/ caching at this point so you don't recalculate the data frame each time
+    //consider checkpoint/ caching at this point so you don't recalculate the data frame each time
 
     val savedFilePath = "s3://commoncrawltake2/ic" 
 
@@ -84,7 +84,7 @@ object SimpleApp {
       val uri = new URI(record.getHeader.getTargetURI)
       url = uri.toURL.getHost().toString
       for (email <- emails)  yield {
-        (email, url.toString)
+        (email, url)
       }
       }
 }
