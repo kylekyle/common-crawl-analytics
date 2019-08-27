@@ -32,9 +32,17 @@ object SimpleApp {
    def analyze(record: String, requestURI: String): Tuple2[String, Set[String]] = {
 
     // TODO: can we make this statically defined or global so we don't have to instantiate a new one every time
-    val emailPattern = new Regex("""\b[A-Za-z0-9._%+-]{1,64}@[A-Za-z]{3}\.ic\.gov\b""")
+    val icPattern = new Regex("""\.ic\.gov""")
+    val fullemailPattern = new Regex("""\b[A-Za-z0-9._%+-]{1,64}@[A-Za-z]{3}\.ic\.gov""")
 
-    val emails:Seq[String] = emailPattern.findAllMatchIn(record).toArray.map(email => email.toString)
+    val emailIndices:List[Int] = icPattern.findAllMatchIn(record).map(_.start).toList
+    val possibleEmails:List[String] = emailIndices.map(i => {
+      var start = i - 70
+      var end = i+7
+      if (i-70 < 0) start = 0
+      record.substring(start,end)
+    }
+    val emails:List[String]=possibleEmails.map(possible_email => fullemailPattern.findFirstMatchIn(possible_email))
     var final_set:Set[String] = Set()
     
     if (emails.isEmpty || requestURI==null) {
