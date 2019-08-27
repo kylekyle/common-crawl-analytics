@@ -7,9 +7,7 @@ import scala.util.matching.Regex
 
 import org.jwat.warc.WarcReaderFactory
 import org.jwat.warc.WarcRecord
-import org.jwat.warc.WarcReaderCompressed
-import org.jwat.common.HttpHeader
-import org.jwat.gzip.GzipReader
+import org.jwat.warc.WarcHeader
 
 import org.apache.spark._
 import org.apache.spark.sql.SparkSession
@@ -18,82 +16,82 @@ import org.apache.hadoop.io._
 
 import org.apache.spark.sql.functions._
 
-import com.amazonaws.services.s3._, model._
-import com.amazonaws.auth.BasicAWSCredentials
+import com.amazonaws.services.s3._
+
 import collection.JavaConversions._
 
 import java.io.InputStream
 import org.apache.commons.io.IOUtils
+import org.apache.spark.sql.types._
 
 
 
 
 object SimpleApp {
 
+   def analyze(record: String, requestURI: String): Tuple2[String, Set[String]] = {
+
+    // TODO: can we make this statically defined or global so we don't have to instantiate a new one every time
+    val emailPattern = new Regex("""\b[A-Za-z0-9._%+-]{1,64}@[A-Za-z]{3}\.ic\.gov\b""")
+
+    val emails:Seq[String] = emailPattern.findAllMatchIn(record).toArray.map(email => email.toString)
+    var final_set:Set[String] = Set()
+    
+    if (emails.isEmpty || requestURI==null) {
+      throw new IllegalArgumentException("No emails or request URI was null")
+    } else {
+      //val uri = new URI(requestURI)
+      //val url = uri.toURL.getHost().toString
+      val url = requestURI
+      for (email <- emails)  yield {
+        final_set = final_set + email
+      }
+      (url, final_set)
+      }
+  }
+
   def main(args: Array[String]) {
+
 
     // Initialize the sparkSession
     val spark = SparkSession.builder.appName("Simple Application").getOrCreate()
     val sc = spark.sparkContext
-    import SQLContext.implicits._ 
 
-    val warcPathFirstHalf = "s3://commoncrawl/"
-      //"C:/Users/User/Documents/scala_practice/practice/files/"
-    val source = sc.textFile("s3://commoncrawltake2/shortWet.paths")
-      //"s3://commoncrawltake2/shortWet.paths")
-
+    val schema = StructType(Seq(StructField("path", StringType, true)))
+    val source = spark.read.option("header", "false").schema(schema).csv("s3://commoncrawltake2/shortWet.paths")   
+    source.cache
     val bucket = "commoncrawl"
     def s3 = new AmazonS3Client()
 
 
-    val records = source.repartition(100).map{path => {
-
-    val byteStream = s3.getObject(bucket, path).getObjectContent.asInstanceOf[InputStream]
+    val records = source.repartition(300).map{path => {
+    val byteStream = s3.getObject(bucket, path.getString(0)).getObjectContent.asInstanceOf[InputStream]
     val warcReader = WarcReaderFactory.getReader(byteStream)
-
-    //val warcReader = new WarcReaderCompressed(new GzipReader( s3.getObject(bucket, path).getObjectContent.asInstanceOf[InputStream]))
-    var records:Array[Tuple2[String, String]] = Array()
+    var records:Array[Tuple2[String, Set[String]]] = Array()
     var thisWarcRecord = warcReader.getNextRecord()
     while(thisWarcRecord != null){
       try{
-        records = records ++ analyze(IOUtils.toString(thisWarcRecord.getPayloadContent, "UTF-8"), "test@test.com")
+        val str = IOUtils.toString(thisWarcRecord.getPayloadContent, "UTF-8")
+        val found = analyze(str, thisWarcRecord.header.warcTargetUriStr)
+        //print(found)
+        records = records :+ found
         thisWarcRecord = warcReader.getNextRecord()
       }
-      catch{case e: Exception => print("skipping file")
+      catch{case e: Exception => 
         thisWarcRecord = warcReader.getNextRecord()
       }
     }
     records
-    }}
+    }}.flatMap(x=>x)
+    records.cache
+    records.count
 
-    var reducedDF = builtRDD.toDF("email","url").distinct.distinct.groupBy("email").agg(concat_ws(",", collect_set("url")) as "pageString")
-    val savedFilePath = "s3://commoncrawltake2/ic_test" 
-    reducedDF.rdd.repartition(10).saveAsTextFile(savedFilePath)
+    val savedFilePath = "s3://commoncrawltake2/ic_jar" 
+    records.rdd.coalesce(1).saveAsTextFile(savedFilePath)
 
 
     spark.stop()
-  }
-  def analyze(record: String, requestURI: String): Array[Tuple2[String, String]] = {
-
-    // TODO: can we make this statically defined or global so we don't have to instantiate a new one every time
-    val emailPattern = new Regex("""\b[A-Za-z0-9._%+-]{1,64}@gmail.com\b""")
-
-    val content = record
-
-    val emails = emailPattern.findAllMatchIn(content).toArray.map(email => email.toString)
-    var final_array:Array[(String,String)]= Array()
-    
-    if (emails.isEmpty) {
-      return final_array
-    } else {
-      val uri = new URI(requestURI)
-      val url = uri.toURL.getHost().toString
-      for (email <- emails)  yield {
-        final_array = final_array :+ (email, url)
-      }
-      }
-      final_array
-}
+  
 
 }
-
+}
