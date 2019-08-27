@@ -38,10 +38,10 @@ object SimpleApp {
     val emailIndices:List[Int] = icPattern.findAllMatchIn(record).map(_.start).toList
     val possibleEmails:List[String] = emailIndices.map(i => {
       var start = i - 70
-      var end = i+7
-      if (i-70 < 0) start = 0
+      val end = i+7
+      if (start < 0) start = 0
       record.substring(start,end)
-    }
+    })
     val emails:List[String]=possibleEmails.map(possible_email => fullemailPattern.findFirstMatchIn(possible_email))
     var final_set:Set[String] = Set()
     
