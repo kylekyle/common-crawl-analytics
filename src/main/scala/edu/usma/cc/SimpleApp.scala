@@ -42,7 +42,7 @@ object SimpleApp {
       if (start < 0) start = 0
       record.substring(start,end)
     })
-    val emails:List[String]=possibleEmails.map(possible_email => fullemailPattern.findFirstMatchIn(possible_email))
+    val emails:List[String]=possibleEmails.map(possible_email => fullemailPattern.findFirstMatchIn(possible_email).mkString).filter(x => x != "")
     var final_set:Set[String] = Set()
     
     if (emails.isEmpty || requestURI==null) {
