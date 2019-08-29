@@ -29,42 +29,13 @@ import org.apache.spark.sql.types._
 
 object SimpleApp {
 
-   def analyze(record: String, requestURI: String): Tuple2[String, Set[String]] = {
-
-    // TODO: can we make this statically defined or global so we don't have to instantiate a new one every time
-    val icPattern = new Regex("""@[A-Za-z]{3}\.ic\.gov""")
-    val fullemailPattern = new Regex("""\b[A-Za-z0-9._%+-]{1,64}@[A-Za-z]{3}\.ic\.gov""")
-
-    val emailIndices:List[Int] = icPattern.findAllMatchIn(record).map(_.start).toList
-    val possibleEmails:List[String] = emailIndices.map(i => {
-      var start = i - 70
-      val end = i+7
-      if (start < 0) start = 0
-      record.substring(start,end)
-    })
-    val emails:List[String]=possibleEmails.map(possible_email => fullemailPattern.findFirstMatchIn(possible_email).mkString).filter(x => x != "")
-    var final_set:Set[String] = Set()
-    
-    if (emails.isEmpty || requestURI==null) {
-      throw new IllegalArgumentException("No emails or request URI was null")
-    } else {
-      //val uri = new URI(requestURI)
-      //val url = uri.toURL.getHost().toString
-      val url = requestURI
-      for (email <- emails)  yield {
-        final_set = final_set + email
-      }
-      (url, final_set)
-      }
-  }
-
   def main(args: Array[String]) {
 
 
     // Initialize the sparkSession
     val spark = SparkSession.builder.appName("Simple Application").getOrCreate()
     val sc = spark.sparkContext
-
+    import spark.implicits._
     val schema = StructType(Seq(StructField("path", StringType, true)))
     val source = spark.read.option("header", "false").schema(schema).csv("s3://commoncrawltake2/wet.paths")   
     source.cache
@@ -103,4 +74,32 @@ object SimpleApp {
   
 
 }
+    def analyze(record: String, requestURI: String): Tuple2[String, Set[String]] = {
+
+    // TODO: can we make this statically defined or global so we don't have to instantiate a new one every time
+    val icPattern = new Regex("""@[A-Za-z]{3}\.ic\.gov""")
+    val fullemailPattern = new Regex("""\b[A-Za-z0-9._%+-]{1,64}@[A-Za-z]{3}\.ic\.gov""")
+
+    val emailIndices:List[Int] = icPattern.findAllMatchIn(record).map(_.start).toList
+    val possibleEmails:List[String] = emailIndices.map(i => {
+      var start = i - 70
+      val end = i+7
+      if (start < 0) start = 0
+      record.substring(start,end)
+    })
+    val emails:List[String]=possibleEmails.map(possible_email => fullemailPattern.findFirstMatchIn(possible_email).mkString).filter(x => x != "")
+    var final_set:Set[String] = Set()
+    
+    if (emails.isEmpty || requestURI==null) {
+      throw new IllegalArgumentException("No emails or request URI was null")
+    } else {
+      //val uri = new URI(requestURI)
+      //val url = uri.toURL.getHost().toString
+      val url = requestURI
+      for (email <- emails)  yield {
+        final_set = final_set + email
+      }
+      (url, final_set)
+      }
+  }
 }
