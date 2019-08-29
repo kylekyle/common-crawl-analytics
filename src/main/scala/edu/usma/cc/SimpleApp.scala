@@ -41,6 +41,7 @@ object SimpleApp {
     source.cache
     val bucket = "commoncrawl"
     def s3 = new AmazonS3Client()
+    //TODO: perhaps we should partition on a smaller factor of the number of files
     val number_of_files = 56000
 
 
@@ -51,6 +52,7 @@ object SimpleApp {
     var thisWarcRecord = warcReader.getNextRecord()
     while(thisWarcRecord != null){
       try{
+        //TODO: Does UTF-8 encoding properly handle non ascii? Are we missing websites that have some chinese characteres for example?
         val str = IOUtils.toString(thisWarcRecord.getPayloadContent, "UTF-8")
         val found = analyze(str, thisWarcRecord.header.warcTargetUriStr)
         //print(found)
@@ -64,6 +66,8 @@ object SimpleApp {
     records
     }}.flatMap(x=>x)
     records.cache
+    //TODO: I think this count is necessary to push the data to the worker nodes, but you might want to test that
+    //... though it's really only adding a few extra seconds to the run time anyways because of the cache
     records.count
 
     val savedFilePath = "s3://commoncrawltake2/ic_jar" 
@@ -77,6 +81,7 @@ object SimpleApp {
     def analyze(record: String, requestURI: String): Tuple2[String, Set[String]] = {
 
     // TODO: can we make this statically defined or global so we don't have to instantiate a new one every time
+      //TODO" This regex only finds 3 letter agencies, does that accurately describe all the data we want to find?
     val icPattern = new Regex("""@[A-Za-z]{3}\.ic\.gov""")
     val fullemailPattern = new Regex("""\b[A-Za-z0-9._%+-]{1,64}@[A-Za-z]{3}\.ic\.gov""")
 
