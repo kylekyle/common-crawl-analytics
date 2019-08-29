@@ -10,7 +10,7 @@ This project contains analytics designed to run on AWS clusters.
 * Copy the jar from you computer to an Amazon S3 bucket (Download via S3 webpage)
 * Go to EMR and create cluster
 * Use Spark software and applicable hardware configuration
-* Run spark application (not custom .jar file) with spark submit option: --class edu.usma.cc.SimpleApp
+* Run spark application (not custom .jar file) with spark submit option: --class edu.usma.cc.SimpleApp --conf spark.locality.wait=0
 
 
 ### Check out the folowing Apache Spark webpage links below for useful information
