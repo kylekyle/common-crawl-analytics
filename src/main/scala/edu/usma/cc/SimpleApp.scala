@@ -66,13 +66,14 @@ object SimpleApp {
     val sc = spark.sparkContext
 
     val schema = StructType(Seq(StructField("path", StringType, true)))
-    val source = spark.read.option("header", "false").schema(schema).csv("s3://commoncrawltake2/shortWet.paths")   
+    val source = spark.read.option("header", "false").schema(schema).csv("s3://commoncrawltake2/wet.paths")   
     source.cache
     val bucket = "commoncrawl"
     def s3 = new AmazonS3Client()
+    val number_of_files = 56000
 
 
-    val records = source.repartition(300).map{path => {
+    val records = source.repartition(number_of_files).map{path => {
     val byteStream = s3.getObject(bucket, path.getString(0)).getObjectContent.asInstanceOf[InputStream]
     val warcReader = WarcReaderFactory.getReader(byteStream)
     var records:Array[Tuple2[String, Set[String]]] = Array()
