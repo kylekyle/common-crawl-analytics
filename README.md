@@ -11,6 +11,7 @@ This project contains analytics designed to run on AWS clusters.
 * Go to EMR and create cluster
 * Use Spark software and applicable hardware configuration
 * Run spark application (not custom .jar file) with spark submit option: --class edu.usma.cc.SimpleApp --conf spark.locality.wait=0
+* WARNING: Make sure the folder(bucket) you are saving your finished dataframe in in does not already exist in S3. If it does at the very end of the multiple hour run, the job will fail!
 
 
 ### Check out the folowing Apache Spark webpage links below for useful information
